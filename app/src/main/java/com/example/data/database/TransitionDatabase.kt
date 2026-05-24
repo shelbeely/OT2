@@ -7,10 +7,11 @@ import androidx.room.RoomDatabase
 import com.example.data.model.MilestoneEntry
 import com.example.data.model.PhotoEntry
 import com.example.data.model.VoiceEntry
+import com.example.data.model.MedicalRecordEntry
 
 @Database(
-    entities = [PhotoEntry::class, VoiceEntry::class, MilestoneEntry::class],
-    version = 1,
+    entities = [PhotoEntry::class, VoiceEntry::class, MilestoneEntry::class, MedicalRecordEntry::class],
+    version = 2,
     exportSchema = false
 )
 abstract class TransitionDatabase : RoomDatabase() {
@@ -18,6 +19,8 @@ abstract class TransitionDatabase : RoomDatabase() {
     abstract fun photoDao(): PhotoDao
     abstract fun voiceDao(): VoiceDao
     abstract fun milestoneDao(): MilestoneDao
+    abstract fun medicalRecordDao(): MedicalRecordDao
+
 
     companion object {
         @Volatile

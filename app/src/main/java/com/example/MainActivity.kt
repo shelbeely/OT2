@@ -39,16 +39,24 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        viewModel.isLaunchingIntent = false
+    }
+
     override fun onStop() {
         super.onStop()
         // Lock the application when putting it into background to ensure strict local privacy!
-        viewModel.lockApp()
+        if (!viewModel.isLaunchingIntent) {
+            viewModel.lockApp()
+        }
     }
 }
 
 @Composable
 fun MainNavigationContainer(viewModel: TransitionViewModel) {
     var selectedScreenIndex by remember { mutableIntStateOf(0) }
+    var currentSubScreen by remember { mutableStateOf<String?>(null) }
 
     val navigationItems = listOf(
         NavigationTabItem(
@@ -90,7 +98,10 @@ fun MainNavigationContainer(viewModel: TransitionViewModel) {
                     val isSelected = selectedScreenIndex == index
                     NavigationBarItem(
                         selected = isSelected,
-                        onClick = { selectedScreenIndex = index },
+                        onClick = { 
+                            currentSubScreen = null
+                            selectedScreenIndex = index 
+                        },
                         label = { Text(item.label) },
                         icon = {
                             Icon(
@@ -109,17 +120,28 @@ fun MainNavigationContainer(viewModel: TransitionViewModel) {
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            when (selectedScreenIndex) {
-                0 -> DashboardScreen(
+            if (currentSubScreen == "health_connect") {
+                HealthConnectScreen(
                     viewModel = viewModel,
-                    onNavigateToCamera = { selectedScreenIndex = 1 },
-                    onNavigateToVoice = { selectedScreenIndex = 2 },
-                    onNavigateToMilestones = { selectedScreenIndex = 3 }
+                    onNavigateBack = { currentSubScreen = null }
                 )
-                1 -> GalleryScreen(viewModel = viewModel)
-                2 -> VoiceRecorderScreen(viewModel = viewModel)
-                3 -> MilestonesScreen(viewModel = viewModel)
-                4 -> SettingsScreen(viewModel = viewModel)
+            } else {
+                when (selectedScreenIndex) {
+                    0 -> DashboardScreen(
+                        viewModel = viewModel,
+                        onNavigateToCamera = { selectedScreenIndex = 1 },
+                        onNavigateToVoice = { selectedScreenIndex = 2 },
+                        onNavigateToMilestones = { selectedScreenIndex = 3 },
+                        onNavigateToHealthConnect = { currentSubScreen = "health_connect" }
+                    )
+                    1 -> GalleryScreen(viewModel = viewModel)
+                    2 -> VoiceRecorderScreen(viewModel = viewModel)
+                    3 -> MilestonesScreen(viewModel = viewModel)
+                    4 -> SettingsScreen(
+                        viewModel = viewModel,
+                        onNavigateToHealthConnect = { currentSubScreen = "health_connect" }
+                    )
+                }
             }
         }
     }

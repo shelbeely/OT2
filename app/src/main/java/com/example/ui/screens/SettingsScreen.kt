@@ -4,14 +4,21 @@ import android.app.DatePickerDialog
 import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.net.Uri
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -26,9 +33,14 @@ import com.example.ui.viewmodel.TransitionViewModel
 import java.text.SimpleDateFormat
 import java.util.*
 
+import com.example.ReminderManager
+import android.Manifest
+import android.os.Build
+
 @Composable
 fun SettingsScreen(
     viewModel: TransitionViewModel,
+    onNavigateToHealthConnect: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -45,6 +57,30 @@ fun SettingsScreen(
 
     var showExportDialog by remember { mutableStateOf(false) }
     var exportedJsonString by remember { mutableStateOf("") }
+
+    var showImportDialog by remember { mutableStateOf(false) }
+    var pasteJsonInput by remember { mutableStateOf("") }
+
+    val coroutineScope = rememberCoroutineScope()
+    var isImportingFile by remember { mutableStateOf(false) }
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            coroutineScope.launch {
+                isImportingFile = true
+                val success = viewModel.importBackupZip(context, uri)
+                isImportingFile = false
+                if (success) {
+                    Toast.makeText(context, "Backup file imported successfully!", Toast.LENGTH_LONG).show()
+                    showImportDialog = false
+                } else {
+                    Toast.makeText(context, "Failed to import backup from selected file.", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
 
     Column(
         modifier = modifier
@@ -159,6 +195,50 @@ fun SettingsScreen(
             }
         }
 
+        // Health Connect & Medical Records Sync Hub configuration shortcut
+        Card(
+            modifier = Modifier.fillMaxWidth().clickable { onNavigateToHealthConnect() }.testTag("settings_health_connect_card"),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .background(Color(0xFF6C63FF).copy(alpha = 0.12f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CloudSync,
+                        contentDescription = null,
+                        tint = Color(0xFF6C63FF),
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Health Connect Sync & FHIR Ledger",
+                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold)
+                    )
+                    Text(
+                        text = "Configure permissions, sync blood lab values (Estradiol/Testosterone), and view FHIR records.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                )
+            }
+        }
+
         // App Lock PIN card section
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -229,6 +309,65 @@ fun SettingsScreen(
             }
         }
 
+        // Daily Reminder section
+        var isReminderEnabled by remember { mutableStateOf(ReminderManager.isReminderEnabled(context)) }
+        val notificationPermissionLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission(),
+            onResult = { granted ->
+                if (granted) {
+                    isReminderEnabled = true
+                    ReminderManager.setReminderEnabled(context, true)
+                    Toast.makeText(context, "Daily reminder enabled!", Toast.LENGTH_SHORT).show()
+                } else {
+                    isReminderEnabled = false
+                    Toast.makeText(context, "Notification permission denied", Toast.LENGTH_SHORT).show()
+                }
+            }
+        )
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Daily Reminder",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Text(
+                            text = "Get a gentle push every evening at 8:00 PM to log your progression.",
+                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        )
+                    }
+
+                    Switch(
+                        checked = isReminderEnabled,
+                        onCheckedChange = { active ->
+                            if (active && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            } else {
+                                isReminderEnabled = active
+                                ReminderManager.setReminderEnabled(context, active)
+                                if (active) {
+                                    Toast.makeText(context, "Daily reminder enabled!", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        modifier = Modifier.testTag("reminder_switch")
+                    )
+                }
+            }
+        }
+
         // Backups export / Sharing and purges Card
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -243,7 +382,7 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
                 )
 
-                // Export Button row
+                // Export & Import Buttons row
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -259,7 +398,20 @@ fun SettingsScreen(
                     ) {
                         Icon(imageVector = Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Export Backup JSON", fontSize = 12.sp)
+                        Text("Export Backup", fontSize = 12.sp)
+                    }
+
+                    Button(
+                        onClick = {
+                            showImportDialog = true
+                        },
+                        modifier = Modifier.weight(1f).testTag("import_backup_button"),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Icon(imageVector = Icons.Default.Upload, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Import Backup", fontSize = 12.sp)
                     }
                 }
 
@@ -376,6 +528,7 @@ fun SettingsScreen(
                                 type = "text/plain"
                             }
                             val shareIntent = Intent.createChooser(sendIntent, "Export OpenTransition backup JSON")
+                            viewModel.isLaunchingIntent = true
                             context.startActivity(shareIntent)
                             showExportDialog = false
                         }
@@ -388,6 +541,155 @@ fun SettingsScreen(
                 dismissButton = {
                     TextButton(onClick = { showExportDialog = false }) {
                         Text("Close")
+                    }
+                }
+            )
+        }
+
+        // Import Backup dialog overlay view
+        if (showImportDialog) {
+            AlertDialog(
+                onDismissRequest = { 
+                    showImportDialog = false
+                    pasteJsonInput = ""
+                },
+                title = { Text("Import Database Backup") },
+                text = {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        // 1. File picker option (.ttbackup or .zip)
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Folder,
+                                    contentDescription = "File Backup",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                                Text(
+                                    text = "Import .ttbackup / .zip file",
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                                Text(
+                                    text = "Select a .ttbackup or .zip archive file exported from TransTracks. The app will extract your records JSON and automatically restore your high-resolution progress photos directly to your secure device gallery.",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, textAlign = TextAlign.Center),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Button(
+                                    onClick = {
+                                        viewModel.isLaunchingIntent = true
+                                        filePickerLauncher.launch("*/*")
+                                    },
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                    modifier = Modifier.testTag("select_backup_file_button")
+                                ) {
+                                    if (isImportingFile) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(16.dp),
+                                            color = MaterialTheme.colorScheme.onPrimary,
+                                            strokeWidth = 2.dp
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Extracting archive...", fontSize = 12.sp)
+                                    } else {
+                                        Icon(imageVector = Icons.Default.Upload, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Select Backup File", fontSize = 12.sp)
+                                    }
+                                }
+                            }
+                        }
+
+                        // Divider OR row
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Divider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                            Text(
+                                text = "OR",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, fontSize = 11.sp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                            )
+                            Divider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                        }
+
+                        // 2. Original paste JSON option
+                        Text(
+                            text = "Alternatively, paste a saved backup JSON string to manually map database transition tables info:",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        OutlinedTextField(
+                            value = pasteJsonInput,
+                            onValueChange = { pasteJsonInput = it },
+                            placeholder = { Text("{ \"milestones\": [...], ... }") },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(130.dp)
+                                .testTag("import_json_text_input"),
+                            textStyle = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        enabled = pasteJsonInput.isNotBlank() && !isImportingFile,
+                        onClick = {
+                            coroutineScope.launch {
+                                isImportingFile = true
+                                val success = viewModel.importBackupJson(pasteJsonInput)
+                                isImportingFile = false
+                                if (success) {
+                                    Toast.makeText(context, "Backup imported successfully and history mapped!", Toast.LENGTH_LONG).show()
+                                    showImportDialog = false
+                                    pasteJsonInput = ""
+                                } else {
+                                    Toast.makeText(context, "Failed to parse backup. Please verify formatting.", Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        }
+                    ) {
+                        if (isImportingFile) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Importing...")
+                        } else {
+                            Icon(imageVector = Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Import Raw Text")
+                        }
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { 
+                        showImportDialog = false
+                        pasteJsonInput = ""
+                    }) {
+                        Text("Cancel")
                     }
                 }
             )

@@ -53,3 +53,19 @@ interface MilestoneDao {
     @Query("DELETE FROM milestones")
     suspend fun clearAllMilestones()
 }
+
+@Dao
+interface MedicalRecordDao {
+    @Query("SELECT * FROM medical_records ORDER BY timestamp DESC")
+    fun getAllMedicalRecords(): Flow<List<com.example.data.model.MedicalRecordEntry>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertMedicalRecord(record: com.example.data.model.MedicalRecordEntry): Long
+
+    @Delete
+    suspend fun deleteMedicalRecord(record: com.example.data.model.MedicalRecordEntry)
+
+    @Query("DELETE FROM medical_records")
+    suspend fun clearAllMedicalRecords()
+}
+

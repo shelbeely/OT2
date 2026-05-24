@@ -30,3 +30,17 @@ data class MilestoneEntry(
     val category: String, // "Medical", "Social", "Legal", "Personal"
     val timestamp: Long = System.currentTimeMillis()
 )
+
+@Entity(tableName = "medical_records")
+data class MedicalRecordEntry(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val resourceId: String, // Unique FHIR Resource ID
+    val title: String, // e.g., "Lab Result: Serum Estradiol"
+    val recordType: String, // "LabResult", "Prescription", "Immunization"
+    val value: String, // e.g., "210 pg/mL" or "4mg Daily"
+    val practitioner: String, // e.g., "Quest Diagnostics" or "Planned Parenthood"
+    val timestamp: Long,
+    val status: String = "Final", // "Final", "Active", "Completed"
+    val rawJson: String // Full FHIR resource format JSON string
+)
+

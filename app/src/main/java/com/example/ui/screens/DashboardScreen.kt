@@ -1,15 +1,16 @@
 package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,44 +29,63 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.data.model.MilestoneEntry
 import com.example.data.model.PhotoEntry
+import com.example.data.model.VoiceEntry
 import com.example.ui.viewmodel.TransitionViewModel
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
     viewModel: TransitionViewModel,
     onNavigateToCamera: () -> Unit,
     onNavigateToVoice: () -> Unit,
     onNavigateToMilestones: () -> Unit,
+    onNavigateToHealthConnect: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val photos by viewModel.photos.collectAsState()
     val milestones by viewModel.milestones.collectAsState()
+    val voiceEntries by viewModel.voiceEntries.collectAsState()
     val daysCount = viewModel.getTransitionDaysCount()
 
-    val latestPhoto = photos.firstOrNull()
-    val recentMilestones = milestones.take(2)
+    // Retrieve absolute latest individual entry overall
+    val latestPhoto = photos.maxByOrNull { it.timestamp }
+    val latestMilestone = milestones.maxByOrNull { it.timestamp }
+    val latestVoice = voiceEntries.maxByOrNull { it.timestamp }
+
+    val latestEntry: Any? = listOfNotNull(latestPhoto, latestMilestone, latestVoice)
+        .maxByOrNull { entry ->
+            when (entry) {
+                is PhotoEntry -> entry.timestamp
+                is MilestoneEntry -> entry.timestamp
+                is VoiceEntry -> entry.timestamp
+                else -> 0L
+            }
+        }
+
+    var showBottomSheet by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
             .testTag("dashboard_screen")
-            .padding(horizontal = 16.dp),
-        contentPadding = PaddingValues(top = 16.dp, bottom = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+            .padding(horizontal = 20.dp),
+        contentPadding = PaddingValues(top = 28.dp, bottom = 40.dp),
+        verticalArrangement = Arrangement.spacedBy(28.dp)
     ) {
-        // Welcome and Days Progress Circular Tracker
+        // 1. THE MOMENTUM CARD (Top portion)
         item {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(24.dp)),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.40f)
                 ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
             ) {
                 Column(
                     modifier = Modifier
@@ -74,303 +94,554 @@ fun DashboardScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "Your Timeline",
-                        style = MaterialTheme.typography.titleMedium.copy(
+                        text = "JOURNEY TIMELINE",
+                        style = MaterialTheme.typography.labelLarge.copy(
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.primary,
+                            letterSpacing = 1.sp
                         )
                     )
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
 
-                    // Soft interactive progress ring design with deep blue & pink gradient
-                    Box(
-                        modifier = Modifier
-                            .size(170.dp)
-                            .background(
-                                brush = Brush.radialGradient(
-                                    colors = listOf(
-                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                                        Color.Transparent
-                                    )
+                    if (daysCount == 0L) {
+                        // Low pressure welcoming aesthetic statement for Day 0
+                        Box(
+                            modifier = Modifier
+                                .size(110.dp)
+                                .background(
+                                    brush = Brush.radialGradient(
+                                        colors = listOf(
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                            Color.Transparent
+                                        )
+                                    ),
+                                    shape = CircleShape
                                 ),
-                                shape = CircleShape
-                            )
-                            .align(Alignment.CenterHorizontally),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = "Day",
-                                style = MaterialTheme.typography.labelLarge.copy(
-                                    color = MaterialTheme.colorScheme.primary,
-                                    letterSpacing = 2.sp
-                                )
-                            )
-                            Text(
-                                text = "$daysCount",
-                                style = MaterialTheme.typography.displayMedium.copy(
-                                    fontWeight = FontWeight.Black,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            )
-                            Text(
-                                text = "on this journey",
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    color = MaterialTheme.colorScheme.secondary,
-                                    fontWeight = FontWeight.Medium
-                                )
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.FavoriteBorder,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(42.dp)
                             )
                         }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "All logs are stored 100% locally & privately inside your secure sandbox.",
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        Spacer(modifier = Modifier.height(20.dp))
+                        Text(
+                            text = "Your Private Transition Sandbox",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            ),
                             textAlign = TextAlign.Center
                         )
-                    )
-                }
-            }
-        }
-
-        // Quick action buttons Grid
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    text = "Quick Actions",
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                    modifier = Modifier.padding(start = 4.dp)
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    // Action Photo
-                    QuickActionCard(
-                        title = "New Photo",
-                        description = "Perfect alignment guide",
-                        icon = Icons.Default.CameraAlt,
-                        backgroundColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                        iconColor = MaterialTheme.colorScheme.primary,
-                        onClick = onNavigateToCamera,
-                        modifier = Modifier.weight(1.0f).testTag("action_photo_button")
-                    )
-
-                    // Action Audio
-                    QuickActionCard(
-                        title = "Record Voice",
-                        description = "Compare pitch logs",
-                        icon = Icons.Default.Mic,
-                        backgroundColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f),
-                        iconColor = MaterialTheme.colorScheme.secondary,
-                        onClick = onNavigateToVoice,
-                        modifier = Modifier.weight(1.0f).testTag("action_voice_button")
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    // Action Milestone
-                    QuickActionCard(
-                        title = "Add Milestone",
-                        description = "Log your transition steps",
-                        icon = Icons.Default.Flag,
-                        backgroundColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.12f),
-                        iconColor = MaterialTheme.colorScheme.onSurface,
-                        onClick = onNavigateToMilestones,
-                        modifier = Modifier.weight(1.0f).testTag("action_milestone_button")
-                    )
-                }
-            }
-        }
-
-        // Latest Photo Preview Section
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    text = "Latest Progress",
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                    modifier = Modifier.padding(start = 4.dp)
-                )
-
-                if (latestPhoto != null) {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .clickable { onNavigateToCamera() },
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                    ) {
-                        Row(
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Welcome. There is no rush, and absolutely zero external pressure. Log daily progress photos, timeline events, or pitches on your own terms. Everything is securely sandbox-stored locally.",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = 18.sp
+                            ),
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        )
+                    } else {
+                        // Day 1+ momentum circle progress tracker
+                        Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                                .size(150.dp)
+                                .background(
+                                    brush = Brush.radialGradient(
+                                        colors = listOf(
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+                                            Color.Transparent
+                                        )
+                                    ),
+                                    shape = CircleShape
+                                ),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(80.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                            ) {
-                                AsyncImage(
-                                    model = File(latestPhoto.filePath),
-                                    contentDescription = "Latest Transition Capture",
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = "DAY",
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        color = MaterialTheme.colorScheme.secondary,
+                                        letterSpacing = 2.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                )
+                                Text(
+                                    text = "$daysCount",
+                                    style = MaterialTheme.typography.displayLarge.copy(
+                                        fontWeight = FontWeight.Black,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
                                 )
                             }
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Last Photo Snap",
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                                )
-                                Text(
-                                    text = "Category: ${latestPhoto.category}",
-                                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.secondary)
-                                )
-                                Text(
-                                    text = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date(latestPhoto.timestamp)),
-                                    style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                )
-                            }
-                            Icon(
-                                imageVector = Icons.Default.ChevronRight,
-                                contentDescription = "Navigate to Gallery",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
                         }
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Text(
+                            text = "Every day is another progressive step on your path.",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.Medium
+                            ),
+                            textAlign = TextAlign.Center
+                        )
                     }
-                } else {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.PhotoLibrary,
-                                contentDescription = null,
-                                modifier = Modifier.size(40.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Text(
-                                text = "No timeline photos saved yet",
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            )
-                            Text(
-                                text = "Use the guides to take your first Face or Body photo.",
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                    textAlign = TextAlign.Center
-                                )
-                            )
-                        }
-                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text(
+                        text = "🔒 Sandbox Mode: 100% Secure & On-Device Storage Only",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            textAlign = TextAlign.Center,
+                            fontSize = 10.sp,
+                            letterSpacing = 0.5.sp
+                        )
+                    )
                 }
             }
         }
 
-        // Recent Timeline milestones preview
+        // 2. THE "ONE BIG BUTTON" RULE (Centered prominent action trigger)
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    text = "Recent Achievements & Milestones",
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                    modifier = Modifier.padding(start = 4.dp)
-                )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Button(
+                    onClick = { showBottomSheet = true },
+                    modifier = Modifier
+                        .height(58.dp)
+                        .widthIn(min = 220.dp)
+                        .testTag("one_big_action_button"),
+                    shape = RoundedCornerShape(29.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    ),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "Log Today",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
+                        )
+                    )
+                }
+            }
+        }
 
-                if (recentMilestones.isNotEmpty()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        recentMilestones.forEach { milestone ->
-                            MilestoneRowItem(milestone = milestone, onDelete = {})
-                        }
-                    }
-                } else {
+        // 3. CLEAN VISUAL HIERARCHY & COMPACT PROGRESS (Only shows absolute single latest entry to avoid text anxiety)
+        if (latestEntry != null) {
+            item {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "LATEST ENTRY",
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            letterSpacing = 1.sp
+                        ),
+                        modifier = Modifier.padding(start = 4.dp)
+                    )
+
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                            .clip(RoundedCornerShape(16.dp)),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.TurnedInNot,
-                                contentDescription = null,
-                                modifier = Modifier.size(40.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Text(
-                                text = "No milestone markers added",
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            )
-                            Text(
-                                text = "Mark important events: hormone started, voice change, medical appointments, legal or social changes.",
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                    textAlign = TextAlign.Center
-                                )
-                            )
+                        when (latestEntry) {
+                            is PhotoEntry -> {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { onNavigateToCamera() }
+                                        .padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(64.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    ) {
+                                        AsyncImage(
+                                            model = File(latestEntry.filePath),
+                                            contentDescription = "Latest Transition Capture",
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Progress Snapshot",
+                                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                        )
+                                        if (latestEntry.notes.isNotBlank()) {
+                                            Text(
+                                                text = latestEntry.notes,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = Color(0xFF55CDFC).copy(alpha = 0.12f)
+                                            ) {
+                                                Text(
+                                                    text = latestEntry.category,
+                                                    style = MaterialTheme.typography.labelSmall.copy(
+                                                        color = Color(0xFF55CDFC),
+                                                        fontWeight = FontWeight.Bold
+                                                    ),
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                            Text(
+                                                text = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date(latestEntry.timestamp)),
+                                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            )
+                                        }
+                                    }
+                                    Icon(
+                                        imageVector = Icons.Default.ChevronRight,
+                                        contentDescription = "Navigate to Gallery",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            is MilestoneEntry -> {
+                                val categoryColor = when (latestEntry.category) {
+                                    "Medical" -> Color(0xFF55CDFC)
+                                    "Social" -> Color(0xFFF7A8B8)
+                                    "Legal" -> Color(0xFF6C63FF)
+                                    else -> MaterialTheme.colorScheme.primary
+                                }
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { onNavigateToMilestones() }
+                                        .padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(48.dp)
+                                            .background(categoryColor.copy(alpha = 0.12f), CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Flag,
+                                            contentDescription = null,
+                                            tint = categoryColor,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = latestEntry.title,
+                                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                        )
+                                        if (latestEntry.description.isNotBlank()) {
+                                            Text(
+                                                text = latestEntry.description,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = categoryColor.copy(alpha = 0.12f)
+                                            ) {
+                                                Text(
+                                                    text = latestEntry.category,
+                                                    style = MaterialTheme.typography.labelSmall.copy(
+                                                        color = categoryColor,
+                                                        fontWeight = FontWeight.Bold
+                                                    ),
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                            Text(
+                                                text = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date(latestEntry.timestamp)),
+                                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            )
+                                        }
+                                    }
+                                    Icon(
+                                        imageVector = Icons.Default.ChevronRight,
+                                        contentDescription = "Navigate to Milestones",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            is VoiceEntry -> {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { onNavigateToVoice() }
+                                        .padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(48.dp)
+                                            .background(Color(0xFFF7A8B8).copy(alpha = 0.12f), CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Mic,
+                                            contentDescription = null,
+                                            tint = Color(0xFFF7A8B8),
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Vocal Pitch Recording",
+                                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                        )
+                                        val durationSec = (latestEntry.durationMs / 1000).coerceAtLeast(1)
+                                        val pitchText = if (latestEntry.estimatedPitchHz > 0) "${latestEntry.estimatedPitchHz.toInt()} Hz" else "Recorded"
+                                        Text(
+                                            text = "Duration: ${durationSec}s | Log Pitch Check: $pitchText",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = Color(0xFFF7A8B8).copy(alpha = 0.12f)
+                                            ) {
+                                                Text(
+                                                    text = "Voice Entry",
+                                                    style = MaterialTheme.typography.labelSmall.copy(
+                                                        color = Color(0xFFF7A8B8),
+                                                        fontWeight = FontWeight.Bold
+                                                    ),
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                            Text(
+                                                text = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date(latestEntry.timestamp)),
+                                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            )
+                                        }
+                                    }
+                                    Icon(
+                                        imageVector = Icons.Default.ChevronRight,
+                                        contentDescription = "Navigate to Voice Recorder",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
         }
     }
+
+    // Modal Bottom Sheet Choice Trigger
+    if (showBottomSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showBottomSheet = false },
+            sheetState = rememberModalBottomSheetState(),
+            containerColor = MaterialTheme.colorScheme.surface,
+            scrimColor = Color.Black.copy(alpha = 0.35f)
+        ) {
+            BottomSheetContent(
+                onNavigateToCamera = {
+                    showBottomSheet = false
+                    onNavigateToCamera()
+                },
+                onNavigateToVoice = {
+                    showBottomSheet = false
+                    onNavigateToVoice()
+                },
+                onNavigateToMilestones = {
+                    showBottomSheet = false
+                    onNavigateToMilestones()
+                },
+                onNavigateToHealthConnect = {
+                    showBottomSheet = false
+                    onNavigateToHealthConnect()
+                },
+                onDismiss = {
+                    showBottomSheet = false
+                }
+            )
+        }
+    }
 }
 
 @Composable
-fun QuickActionCard(
+fun BottomSheetContent(
+    onNavigateToCamera: () -> Unit,
+    onNavigateToVoice: () -> Unit,
+    onNavigateToMilestones: () -> Unit,
+    onNavigateToHealthConnect: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "Record Today's Progress",
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center
+        )
+        Text(
+            text = "Choose an entry type below. Your choices are safely kept private.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 4.dp, bottom = 24.dp)
+        )
+
+        // Option 1: Photo Entry (Sky Blue theme)
+        BottomSheetOptionRow(
+            title = "Capture Daily Photo",
+            description = "High quality alignment overlays & guide support to capture progressive changes.",
+            icon = Icons.Default.CameraAlt,
+            containerColor = Color(0xFF55CDFC).copy(alpha = 0.12f),
+            iconColor = Color(0xFF55CDFC),
+            onClick = onNavigateToCamera,
+            testTag = "log_option_photo"
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Option 2: Voice Diary (Classic Pink theme)
+        BottomSheetOptionRow(
+            title = "Voice Pitch Record",
+            description = "Compare frequency analysis and record tracking vocal progress.",
+            icon = Icons.Default.Mic,
+            containerColor = Color(0xFFF7A8B8).copy(alpha = 0.12f),
+            iconColor = Color(0xFFF7A8B8),
+            onClick = onNavigateToVoice,
+            testTag = "log_option_voice"
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Option 3: Milestone Addition (Primary App theme)
+        BottomSheetOptionRow(
+            title = "Add Milestone Step",
+            description = "Mark hormone steps, sharing logs, document updates, or personal events.",
+            icon = Icons.Default.Flag,
+            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+            iconColor = MaterialTheme.colorScheme.primary,
+            onClick = onNavigateToMilestones,
+            testTag = "log_option_milestone"
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Option 4: Health Connect Sync Hub (Modern Unified Purple)
+        BottomSheetOptionRow(
+            title = "Health Connect & Labs",
+            description = "Sync, view and manual log on-device clinical FHIR blood records & targets.",
+            icon = Icons.Default.CloudSync,
+            containerColor = Color(0xFF6C63FF).copy(alpha = 0.12f),
+            iconColor = Color(0xFF6C63FF),
+            onClick = onNavigateToHealthConnect,
+            testTag = "log_option_health_connect"
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Clean text escape option
+        TextButton(
+            onClick = onDismiss,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+        ) {
+            Text(
+                "Close Menu",
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.secondary
+            )
+        }
+    }
+}
+
+@Composable
+fun BottomSheetOptionRow(
     title: String,
     description: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    backgroundColor: Color,
+    containerColor: Color,
     iconColor: Color,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    testTag: String
 ) {
-    Card(
-        modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .clickable { onClick() },
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    Surface(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(testTag),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
-                    .size(40.dp)
-                    .background(backgroundColor, CircleShape),
+                    .size(48.dp)
+                    .background(containerColor, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -380,21 +651,30 @@ fun QuickActionCard(
                     modifier = Modifier.size(24.dp)
                 )
             }
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-            )
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 16.sp
+                )
+            }
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
             )
         }
     }
 }
 
+// Keeping MilestoneRowItem at the bottom to remain fully compatible with package usages in MilestonesScreen.kt
 @Composable
 fun MilestoneRowItem(
     milestone: MilestoneEntry,
@@ -409,7 +689,9 @@ fun MilestoneRowItem(
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Row(
