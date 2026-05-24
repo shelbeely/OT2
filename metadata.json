@@ -1,0 +1,6 @@
+{
+  "name": "OpenTransition",
+  "description": "A modern, privacy-first, local-storage tracker application for documenting a gender transition timeline.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
